@@ -161,7 +161,7 @@ pub mod pallet {
 
     #[pallet::type_value]
     pub fn DefaultMaxNameLength<T: Config>() -> u16 {
-        32
+        96
     }
     #[pallet::storage] // --- ITEM ( max_name_length )
     pub(super) type MaxNameLength<T: Config> =
@@ -283,10 +283,10 @@ pub mod pallet {
         pub max_registrations_per_block: u16, // max number of registrations per block
         pub max_allowed_weights: u16,         // max number of weights per module
         pub max_proposals: u64,               // max number of proposals per block
+        pub max_burn: u64,                    // max burn allowed
 
         // mins
         pub min_burn: u64,                 // min burn required
-        pub max_burn: u64,                 // max burn allowed
         pub min_stake: u64,                // min stake required
         pub floor_delegation_fee: Percent, // min delegation fee
         pub min_weight_stake: u64,         // min weight stake required

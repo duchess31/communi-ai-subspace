@@ -32,7 +32,10 @@ use sp_runtime::{
 };
 
 use sp_std::{marker::PhantomData, prelude::*};
-use subspace_runtime_api::{ModuleInfo, ModuleParams, ModuleStats};
+use subspace_runtime_api::{
+    GlobalInfo, GlobalParams, GlobalState, KeyInfo, KeyStakeToInfo, ModuleInfo, ModuleParams,
+    ModuleStats, SubnetInfo, SubnetParams, SubnetState,
+};
 
 #[cfg(feature = "std")]
 use sp_version::NativeVersion;
@@ -59,6 +62,7 @@ pub use frame_system::Call as SystemCall;
 pub use pallet_balances::Call as BalancesCall;
 pub use pallet_timestamp::Call as TimestampCall;
 use pallet_transaction_payment::{ConstFeeMultiplier, CurrencyAdapter, Multiplier};
+use scale_info::prelude::string::String;
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
 pub use sp_runtime::{Perbill, Permill};
@@ -1020,15 +1024,83 @@ impl_runtime_apis! {
         }
     }
     impl subspace_runtime_api::SubspaceRuntimeApi<Block> for Runtime {
-        fn get_burn_rate() -> u16 {
-            SubspaceModule::get_burn_rate()
+        fn get_global_info() -> GlobalInfo {
+            let params = SubspaceModule::global_params();
+
+            GlobalInfo {
+                stats: GlobalState {
+                    registrations_per_block: SubspaceModule::get_registrations_this_block(),
+                    total_subnets: SubspaceModule::num_subnets()
+                },
+                params: GlobalParams {
+                    burn_rate: params.burn_rate,
+
+                    // max
+                    max_name_length: params.max_name_length,
+                    max_allowed_subnets: params.max_allowed_subnets,
+                    max_allowed_modules: params.max_allowed_modules,
+                    max_registrations_per_block: params.max_registrations_per_block,
+                    max_allowed_weights: params.max_allowed_weights,
+                    max_proposals: params.max_proposals,
+                    max_burn: params.max_burn,
+
+                    // min
+                    min_burn: params.min_burn,
+                    min_stake: params.min_stake,
+                    floor_delegation_fee: params.floor_delegation_fee,
+                    min_weight_stake: params.min_weight_stake,
+
+                    // other
+                    target_registrations_per_interval: params.target_registrations_per_interval,
+                    target_registrations_interval: params.target_registrations_interval,
+
+                    adjustment_alpha: params.adjustment_alpha,
+                    unit_emission: params.unit_emission,
+                    tx_rate_limit: params.tx_rate_limit,
+                    vote_threshold: params.vote_threshold,
+                    vote_mode: String::from_utf8(params.vote_mode).expect("Name bytes should be valid utf8")
+                }
+            }
+        }
+
+        fn get_subnet_info(netuid: u16) -> SubnetInfo {
+            let params = SubspaceModule::subnet_params(netuid);
+
+            SubnetInfo {
+                stats: SubnetState {
+                    emission: SubspaceModule::get_subnet_emission(netuid),
+                    n_uids: SubspaceModule::get_subnet_n(netuid),
+                    pending_emission: SubspaceModule::get_pending_emission(netuid),
+                    total_stake: SubspaceModule::get_total_subnet_stake(netuid),
+
+                },
+                params: SubnetParams {
+                    founder: params.founder,
+                    founder_share: params.founder_share,
+                    immunity_period: params.immunity_period,
+                    incentive_ratio: params.incentive_ratio,
+                    max_allowed_uids: params.max_allowed_uids,
+                    max_allowed_weights: params.max_allowed_weights,
+                    min_allowed_weights: params.min_allowed_weights,
+                    max_stake: params.max_stake,
+                    max_weight_age: params.max_weight_age,
+                    min_stake: params.min_stake,
+                    name: String::from_utf8(params.name).expect("Name bytes should be valid utf8"),
+                    tempo: params.tempo,
+                    trust_ratio: params.trust_ratio,
+                    vote_threshold: params.vote_threshold,
+                    vote_mode: String::from_utf8(params.vote_mode).expect("Name bytes should be valid utf8"),
+                }
+            }
         }
 
         fn get_module_info(key: AccountId, netuid: u16) -> ModuleInfo {
+            let uid = SubspaceModule::get_uid_for_key(netuid, &key);
             let stats = SubspaceModule::get_module_stats(netuid, &key);
             let params = SubspaceModule::module_params(netuid, &key);
 
             ModuleInfo {
+                uid,
                 stats: ModuleStats {
                     stake_from: stats.stake_from,
                     emission: stats.emission,
@@ -1039,11 +1111,48 @@ impl_runtime_apis! {
                     weights: stats.weights,
                 },
                 params: ModuleParams {
-                    name: params.name,
-                    address: params.address,
+                    name: String::from_utf8(params.name).expect("Name bytes should be valid utf8"),
+                    address: String::from_utf8(params.address).expect("Name bytes should be valid utf8"),
                     delegation_fee: params.delegation_fee,
                     controller: params.controller,
                 }
+            }
+        }
+
+        fn get_key_info(key: AccountId) -> KeyInfo {
+            let balance = SubspaceModule::get_balance_u64(&key);
+            let total_stake = SubspaceModule::get_global_stake_to(&key);
+            let mut stake_to: Vec<KeyStakeToInfo> = Vec::new();
+
+            for netuid in SubspaceModule::netuids() {
+                let stake_to_vec = SubspaceModule::get_stake_to_vector(netuid, &key);
+
+                let stake_to_module: Vec<(String, u64)> = stake_to_vec
+                    .into_iter()
+                    .filter(|(_, a)| *a > 0)
+                    .map(|(module_key, amount)| {
+                        let name = SubspaceModule::get_module_name(netuid, &module_key);
+                        let name = String::from_utf8(name).expect("Name must be valid utf8");
+                        (name, amount)
+                    })
+                    .collect();
+
+                if !stake_to_module.is_empty() {
+                    let subnet_name_bytes = SubspaceModule::get_subnet_name(netuid);
+                    stake_to.push(
+                        KeyStakeToInfo {
+                            netuid,
+                            subnet_name: String::from_utf8(subnet_name_bytes).expect("Name bytes should be valid utf8"),
+                            stake_to_module
+                        }
+                    )
+                }
+           }
+
+            KeyInfo {
+                balance,
+                total_stake,
+                stake_to
             }
         }
     }

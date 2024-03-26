@@ -77,7 +77,7 @@ impl<T: Config> Pallet<T> {
             max_weight_age: MaxWeightAge::<T>::get(netuid),
             min_stake: MinStake::<T>::get(netuid),
             tempo: Tempo::<T>::get(netuid),
-            name: <Vec<u8>>::new(),
+            name: SubnetNames::<T>::get(netuid),
             vote_threshold: VoteThresholdSubnet::<T>::get(netuid),
             vote_mode: VoteModeSubnet::<T>::get(netuid),
             trust_ratio: TrustRatio::<T>::get(netuid),
@@ -385,6 +385,10 @@ impl<T: Config> Pallet<T> {
         SubnetNames::<T>::iter().find(|(_, n)| n == name).map(|(id, _)| id)
     }
 
+    pub fn get_subnet_name(netuid: u16) -> Vec<u8> {
+        SubnetNames::<T>::get(netuid)
+    }
+
     pub fn remove_netuid_stake_strorage(netuid: u16) {
         // --- 1. Erase network stake, and remove network from list of networks.
         for (key, _stated_amount) in
@@ -639,13 +643,10 @@ impl<T: Config> Pallet<T> {
     // ============================
     // ==== Subnetwork Getters ====
     // ============================
-
-    #[cfg(debug_assertions)]
     pub fn get_pending_emission(netuid: u16) -> u64 {
         PendingEmission::<T>::get(netuid)
     }
 
-    #[cfg(debug_assertions)]
     pub fn get_registrations_this_block() -> u16 {
         RegistrationsPerBlock::<T>::get()
     }
